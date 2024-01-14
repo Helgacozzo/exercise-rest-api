@@ -2,6 +2,7 @@ import express from "express";
 import path from "path";
 import morgan from "morgan";
 import fs from "fs";
+import cors from "cors";
 
 const readResource = async (resourceName) => {
     try {
@@ -143,6 +144,7 @@ app.listen(3000, () => {
 });
 app.use(morgan('dev'));
 app.use(express.json());
+app.use(cors({origin : '*'}));
 
 listenResource('books', ['title', 'author', 'year']);
 listenResource('authors', ['name', 'last_name', 'address', 'age']);
