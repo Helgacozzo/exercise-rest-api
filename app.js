@@ -59,13 +59,6 @@ const listenResource = (resourceName, keys) => {
         writeResource(resourceName, []);
     }
 
-    const app = express();
-    app.listen(3000, () => {
-        console.log('The server is active and listening on port 3000!');
-    });
-    app.use(morgan('dev'));
-    app.use(express.json());
-
     app.get(`/${resourceName}`, (req, res) => {
         res.sendFile(path.resolve(`./database/${resourceName}.json`));
     });
@@ -143,6 +136,13 @@ const listenResource = (resourceName, keys) => {
         res.send(`/${resourceName} with ID ${id} deleted correctly.`);
     })
 }
+
+const app = express();
+app.listen(3000, () => {
+    console.log('The server is active and listening on port 3000!');
+});
+app.use(morgan('dev'));
+app.use(express.json());
 
 listenResource('books', ['title', 'author', 'year']);
 listenResource('authors', ['name', 'last_name', 'address', 'age']);
