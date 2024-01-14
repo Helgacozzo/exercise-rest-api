@@ -1,7 +1,7 @@
 import express from "express";
 import path from "path";
 import morgan from "morgan";
-
+import fs from "fs";
 
 const readResource = async (resourceName) => {
     try {
@@ -15,14 +15,18 @@ const readResource = async (resourceName) => {
 
 const writeResource = (resourceName, resource) => {
     const data = JSON.stringify(resource);
+    const directoryPath = path.resolve(`./database`);
+    if (!fs.existsSync(directoryPath)) {
+        fs.mkdirSync(directoryPath);
+    }
     fs.writeFileSync(path.resolve(`./database/${resourceName}.json`), data);
 }
 
 const generateId = (resourceName) => {
     const resource = readResource(resourceName);
-    const ids = resource.map(b => b.id);
+    const ids = resource.map(b => Number(b.id));
     for (let i = 0; i <= ids.length; i++) {
-        if (!ids.includes(i)) {
+        if (!ids.includes(Number(i))) {
             return i;
         }
     }
@@ -38,8 +42,8 @@ const getSingleResource = (resourceName, req, res) => {
     let resourceIndex;
     for (let i = 0; i < resource.length; i++) {
         const element = resource[i];
-        if (element.id === Number(id)) {
-            indexOfDelete = i;
+        if (Number(element.id) === Number(id)) {
+            resourceIndex = i;
             break;
         }
     }
@@ -50,85 +54,95 @@ const getSingleResource = (resourceName, req, res) => {
     return [resource[resourceIndex], resourceIndex];
 }
 
-
-const app = express();
-app.listen(3000, () => {
-    console.log('il server è attivo e in ascolto sulla porta 3000!');
-});
-app.use(morgan('dev'));
-app.use(express.json());
-
-
-app.get('/books', (req, res) => {
-    res.sendFile(path.resolve('./database/books.json'));
-});
-
-app.post('/books', (req, res) => {
-    const newBook = req.body;
-    let isBookvalid = true;
-    isBookvalid &= Object.keys(newBook).length === 3;
-    ['title', 'author', 'year'].forEach((key) => {
-        isBookvalid &= value[key] !== undefined;
-    });
-    if (!isBookvalid) {
-        res.status(400).send("Books must have title, author and year property");
-        return;
+const listenResource = (resourceName, keys) => {
+    if (!fs.existsSync(path.resolve(`./database/${resourceName}.json`))) {
+        writeResource(resourceName, []);
     }
-    const books = readResource('books');
-    newBook.id = generateId('books');
-    books.push(newBook);
-    writeResource('books', books);
-    res.send(newBook);
-});
 
-
-app.get('/books/:id', (req, res) => {
-    const [book] = getSingleResource('books', req, res)
-    res.send(book);
-});
-
-app.put('/books/:id', (req, res) => {
-    const newBook = req.body;
-    let isBookvalid = true;
-    isBookvalid &= Object.keys(newBook).length === 3;
-    ['title', 'author', 'year'].forEach((key) => {
-        isBookvalid &= value[key] !== undefined;
+    const app = express();
+    app.listen(3000, () => {
+        console.log('The server is active and listening on port 3000!');
     });
-    if (!isBookvalid) {
-        res.status(400).send("Books must have title, author and year property");
-        return;
-    }
-    const [, indexToUpdate] = getSingleResource('books', req, res);
-    const books = readResource('books');
-    newBook.id = req.params.id;
-    books[indexToUpdate] = newBook;
-    writeResource('books', books);
-    res.send(newBook);
-});
+    app.use(morgan('dev'));
+    app.use(express.json());
 
-app.patch('/books/:id', (req, res) => {
-    const newProperties = req.body;
-    let isPropertiesValid = Object.keys(newProperties).length <= 3;
-    Object.keys(newProperties).forEach((key) => {
-        isPropertiesValid &= ['title', 'author', 'year'].includes(key);
+    app.get(`/${resourceName}`, (req, res) => {
+        res.sendFile(path.resolve(`./database/${resourceName}.json`));
+    });
+
+    app.post(`/${resourceName}`, (req, res) => {
+        const newResource = req.body;
+        let isResourceValid = true;
+        isResourceValid &= Object.keys(newResource).length === keys.length;
+        keys.forEach((key) => {
+            isResourceValid &= newResource[key] !== undefined;
+        });
+        if (!isResourceValid) {
+            res.status(400).send(`/${resourceName} must have ${keys} properties.`);
+            return;
+        }
+        const resourceList = readResource(resourceName);
+        newResource.id = generateId(resourceName);
+        resourceList.push(newResource);
+        writeResource(resourceName, resourceList);
+        res.send(newResource);
+    });
+
+    app.get(`/${resourceName}/:id`, (req, res) => {
+        const [resource] = getSingleResource(resourceName, req, res);
+        res.send(resource);
+    });
+
+    app.put(`/${resourceName}/:id`, (req, res) => {
+        const newResource = req.body;
+        let isResourceValid = true;
+        isResourceValid &= Object.keys(newResource).length === keys.length;
+        keys.forEach((key) => {
+            isResourceValid &= newResource[key] !== undefined;
+        });
+        if (!isResourceValid) {
+            res.status(400).send(`/${resourceName} must have ${keys} properties.`);
+            return;
+        }
+        const [, indexToUpdate] = getSingleResource(resourceName, req, res);
+        const resourceList = readResource(resourceName);
+        newResource.id = req.params.id;
+        resourceList[indexToUpdate] = newResource;
+        writeResource(resourceName, resourceList);
+        res.send(newResource);
+    });
+
+    app.patch(`/${resourceName}/:id`, (req, res) => {
+        const newProperties = req.body;
+        const numProperties = Object.keys(newProperties).length;
+        if (numProperties > keys.length - 1) {
+            res.status(400).send(`You can patch up ${keys.length - 1}. You can use the put method instead.`);
+            return;
+        }
+        let isPropertiesValid = true;
+        Object.keys(newProperties).forEach((key) => {
+            isPropertiesValid &= keys.includes(key);
+        })
+        if (!isPropertiesValid) {
+            res.status(400).send(`/${resourceName} must have ${keys} properties.`);
+            return;
+        }
+        const [, indexToUpdate] = getSingleResource(resourceName, req, res);
+        const resourceList = readResource(resourceName);
+        resourceList[indexToUpdate] = { ...resourceList[indexToUpdate], ...newProperties };
+        writeResource(resourceName, resourceList);
+        res.send(resourceList[indexToUpdate]);
+    });
+
+    app.delete(`/${resourceName}/:id`, (req, res) => {
+        const { id } = req.params;
+        const resourceList = readResource(resourceName);
+        const [, indexOfDelete] = getSingleResource(resourceName, req, res);
+        resourceList.splice(indexOfDelete, 1);
+        writeResource(resourceName, resourceList);
+        res.send(`/${resourceName} with ID ${id} deleted correctly.`);
     })
-    if (!isBookvalid) {
-        res.status(400).send("Properties must be 3 only and with name key 'title', 'author' or 'year'.");
-        return;
-    }
-    const [, indexToUpdate] = getSingleResource('books', req, res);
-    const books = readResource('books');
-    books[indexToUpdate] = {...books[indexToUpdate], ...newProperties};
-    writeResource('books', books);
-    res.send(newBook);
-});
+}
 
-app.delete('/books/:id', (req, res) => {
-    const { id } = req.params;
-    const books = readResource('books');
-    const [, indexOfDelete] = getSingleResource('books', req.res);
-    books.splice(indexOfDelete, 1);
-    writeResource('books', books);
-    res.send(`Book with id ${id} deleted correctly.`);
-})
-
+listenResource('books', ['title', 'author', 'year']);
+listenResource('authors', ['name', 'last_name', 'address', 'age']);
